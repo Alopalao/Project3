@@ -1,10 +1,12 @@
 /*******************
 
 Team members and IDs:
-Name:Aldo Ortega ID:6156151
+Name1 ID1
+Name2 ID2
+Name3 ID3
 
 Github link:
-https://github.com/Alopalao/Project3
+https://github.com/xxx/yyy
 
 *******************/
 
@@ -136,7 +138,6 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 			System.out.println("*** Print topology");
 			System.out.println("IS WORKING?");
 			// For each switch, print its neighbor switches.
-
 			printedTopo = true;
 		}
 
@@ -156,11 +157,14 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 			OFPacketIn pi = (OFPacketIn)msg;
 			OFMatch match = new OFMatch();
 		    match.loadFromPacket(pi.getPacketData(), pi.getInPort());	
-			
+
 			// Obtain source and destination IPs.
+		    int ko = pi.getInPort();
+		    System.out.println("srcIP: " + match.getNetworkSourceCIDR());
+		    System.out.println("dstIP: " + match.getNetworkDestinationCIDR());
 			// ...
-			System.out.println("srcIP: " + "a.b.c.d");
-	        System.out.println("dstIP: " + "a.b.c.d");
+			//System.out.println("srcIP: " + "a.b.c.d");
+	        //System.out.println("dstIP: " + "a.b.c.d");
 
 
 			// Calculate the path using Dijkstra's algorithm.
@@ -182,9 +186,7 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 
 		OFMatch m = new OFMatch();
 
-		m.setDataLayerType(Ethernet.TYPE_IPv4)
-				.setNetworkSource(match.getNetworkSource())
-				.setNetworkDestination(match.getNetworkDestination());
+		m.setDataLayerType(Ethernet.TYPE_IPv4).setNetworkSource(match.getNetworkSource()).setNetworkDestination(match.getNetworkDestination());
 
 		for (int i = 0; i <= path.size() - 1; i += 2) {
 			short inport = path.get(i).getPortId();
