@@ -199,11 +199,13 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 		    String dstIP = IPv4.fromIPv4Address(match.getNetworkDestination());
 		    System.out.println("srcIP: " + srcIP);
 		    System.out.println("dstIP: " + dstIP);
+		    
 			// Calculate the path using Dijkstra's algorithm.
 			Long src = Long.valueOf(Character.getNumericValue(srcIP.charAt(7)));
 			Long dst = Long.valueOf(Character.getNumericValue(dstIP.charAt(7)));
 		    predijkstra();
 		    dijkstra(src, dst, result);
+		    
 		    System.out.print("Path: ");
 		    for(int i = 0; i < result.size(); i++) {
 		    	System.out.print(result.get(i) + " ");
@@ -215,29 +217,25 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 		    List<NodePortTuple> switchPorts = new ArrayList<>();
 		    for(int i = 0; i < result.size() - 1; i++) {
 		    	Link link = findLink(i);
-		    	NodePortTuple node = new NodePortTuple(link.getSrc(), link.getSrcPort());
-		    	//System.out.println("ADDING -> " + link.getSrc() + " \nAND -> " + link.getDstPort());
-		    	switchPorts.add(node);
+		    	NodePortTuple node1 = new NodePortTuple(link.getSrc(), link.getSrcPort());
+		    	NodePortTuple node2 = new NodePortTuple(link.getDst(), link.getDstPort());
+		    	switchPorts.add(node1);
+		    	switchPorts.add(node2);
 		    }
 		    
 			Route route = new Route(id, switchPorts);
-			System.out.println("Size -> " + route.getPath().size());
-			System.out.println("First? -> " + route.getPath().get(0).getPortId());
-			// ...		
 
 			// Write the path into the flow tables of the switches on the path.
 			if (route != null) {	
 				installRoute(route.getPath(), match);
-				//System.out.println("Path Installed");
+				System.out.println("Path Installed");
 			}
 			
 			return Command.STOP;
 		}
 	}
 
-	// Install routing rules on switches. 
 	private void installRoute(List<NodePortTuple> path, OFMatch match) {
-		System.out.println("The function installRoute was triggered");
 
 		OFMatch m = new OFMatch();
 
@@ -249,7 +247,7 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 			short inport = path.get(i).getPortId();
 			m.setInputPort(inport);
 			List<OFAction> actions = new ArrayList<OFAction>();
-			OFActionOutput outport = new OFActionOutput(path.get(i).getPortId());
+			OFActionOutput outport = new OFActionOutput(path.get(i+1).getPortId());
 			actions.add(outport);
 
 			OFFlowMod mod = (OFFlowMod) floodlightProvider
@@ -301,10 +299,7 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 	private Link findLink(int pos) {
 		for(Link aux: lds.getSwitchLinks().get(result.get(pos))) {
 			if(aux.getSrc() == result.get(pos)) {
-				//System.out.println("This is the source -> " + aux.getSrc());
 				if(aux.getDst() == result.get(pos+1)) {
-					//System.out.println("This is the destination -> " + aux.getDst());
-					//System.out.println("FOUND IT");
 					return aux;
 				}
 			}
