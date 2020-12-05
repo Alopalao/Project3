@@ -6,8 +6,6 @@ Aldo Arturo Ortega Yucra 6156151
 Github link:
 https://github.com/Alopalao/Project3
 
-Testing VSCode
-
 *******************/
 
 package net.floodlightcontroller.myrouting;
@@ -171,11 +169,11 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 						}
 						System.out.print(dst + " ");
 						topo.get(src).put(dst, w);
-						
 					}
 				}
 				System.out.println();
 			}
+			
 			printedTopo = true;
 		}
 
@@ -197,8 +195,8 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 		    match.loadFromPacket(pi.getPacketData(), pi.getInPort());	
 			// Obtain source and destination IPs.
 			// ...
-		    String srcIP = match.getNetworkSourceCIDR();
-		    String dstIP = match.getNetworkDestinationCIDR();
+		    String srcIP = IPv4.fromIPv4Address(match.getNetworkSource());
+		    String dstIP = IPv4.fromIPv4Address(match.getNetworkDestination());
 		    System.out.println("srcIP: " + srcIP);
 		    System.out.println("dstIP: " + dstIP);
 			// Calculate the path using Dijkstra's algorithm.
@@ -211,13 +209,26 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 		    	System.out.print(result.get(i) + " ");
 		    }
 		    System.out.println();
-			Route route = null;
-			// ...
-			System.out.println("route: " + "1 2 3 ...");			
+		    
+		    RouteId id = new RouteId(src, dst);
+		    
+		    List<NodePortTuple> switchPorts = new ArrayList<>();
+		    for(int i = 0; i < result.size() - 1; i++) {
+		    	Link link = findLink(i);
+		    	NodePortTuple node = new NodePortTuple(link.getSrc(), link.getSrcPort());
+		    	//System.out.println("ADDING -> " + link.getSrc() + " \nAND -> " + link.getDstPort());
+		    	switchPorts.add(node);
+		    }
+		    
+			Route route = new Route(id, switchPorts);
+			System.out.println("Size -> " + route.getPath().size());
+			System.out.println("First? -> " + route.getPath().get(0).getPortId());
+			// ...		
 
 			// Write the path into the flow tables of the switches on the path.
 			if (route != null) {	
 				installRoute(route.getPath(), match);
+				//System.out.println("Path Installed");
 			}
 			
 			return Command.STOP;
@@ -238,8 +249,7 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 			short inport = path.get(i).getPortId();
 			m.setInputPort(inport);
 			List<OFAction> actions = new ArrayList<OFAction>();
-			OFActionOutput outport = new OFActionOutput(path.get(i + 1)
-					.getPortId());
+			OFActionOutput outport = new OFActionOutput(path.get(i).getPortId());
 			actions.add(outport);
 
 			OFFlowMod mod = (OFFlowMod) floodlightProvider
@@ -260,10 +270,6 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 	}
 	
 	private void predijkstra() {
-		visited = new Boolean[topo.size()];
-		for (int i = 0; i < topo.size(); i++) {
-			visited[i] = false;
-		}
 		result = new ArrayList<Long>();
 	}
 	
@@ -290,6 +296,20 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 		if(!ready) {
 			dijkstra(got, dst, result);
 		}
+	}
+	
+	private Link findLink(int pos) {
+		for(Link aux: lds.getSwitchLinks().get(result.get(pos))) {
+			if(aux.getSrc() == result.get(pos)) {
+				//System.out.println("This is the source -> " + aux.getSrc());
+				if(aux.getDst() == result.get(pos+1)) {
+					//System.out.println("This is the destination -> " + aux.getDst());
+					//System.out.println("FOUND IT");
+					return aux;
+				}
+			}
+		}
+		return null;
 	}
 	
 }
