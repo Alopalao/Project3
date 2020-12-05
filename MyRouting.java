@@ -1,12 +1,10 @@
 /*******************
 
 Team members and IDs:
-Name1 ID1
-Name2 ID2
-Name3 ID3
+Aldo Arturo Ortega Yucra 6156151
 
 Github link:
-https://github.com/xxx/yyy
+https://github.com/Alopalao/Project3
 
 *******************/
 
@@ -18,7 +16,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.PriorityQueue;
+
+import java.util.ArrayList;
 
 import org.openflow.protocol.OFFlowMod;
 import org.openflow.protocol.OFMatch;
@@ -66,20 +67,25 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 	protected IDeviceService deviceProvider;
 	protected ILinkDiscoveryService linkProvider;
 
-	protected Map<Long, IOFSwitch> switches;
-	protected Map<Link, LinkInfo> links;
+	protected Map<Long, IOFSwitch> switches; //ID switches and switches
+	protected Map<Link, LinkInfo> links; //connections
 	protected Collection<? extends IDevice> devices;
 
 	protected static int uniqueFlow;
-	protected ILinkDiscoveryService lds;
+	protected ILinkDiscoveryService lds; //list of links??
 	protected IStaticFlowEntryPusherService flowPusher;
 	protected boolean printedTopo = false;
+	
+	protected HashMap<Long, HashMap<Long, Long>> topo = new HashMap<Long, HashMap<Long, Long>>();//<src, <dst, cost>>
+	//protected PriorityQueue<HashMap<Long, Long>> result = new PriorityQueue<HashMap<Long, Long>>();
+	protected ArrayList<Long> result;
 
 	@Override
 	public String getName() {
 		return MyRouting.class.getSimpleName();
 	}
-
+	
+	
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
 		return (type.equals(OFType.PACKET_IN)
@@ -103,8 +109,10 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 	}
 
 	@Override
+	//Do nothing here
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
-		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+		Collection<Class<? extends IFloodlightService>> l 
+		= new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(IDeviceService.class);
 		l.add(ILinkDiscoveryService.class);
@@ -130,14 +138,42 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 	}
 
 	@Override
-	public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-
-
+	public net.floodlightcontroller.core.IListener.Command receive(
+			IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		// Print the topology if not yet.
 		if (!printedTopo) {
 			System.out.println("*** Print topology");
-			System.out.println("IS WORKING?");
 			// For each switch, print its neighbor switches.
+			switches = floodlightProvider.getAllSwitchMap();
+			links = lds.getLinks();
+			
+			
+			for(Map.Entry<Long, IOFSwitch> aux : switches.entrySet()) {
+				
+				Long src = aux.getValue().getId();
+				topo.put(src, new HashMap<Long, Long>());
+				System.out.print("switch " + src + " neighbors: ");
+				
+				for(Map.Entry<Link, LinkInfo> linkaux : links.entrySet()) {
+					Long dst = linkaux.getKey().getDst();
+					if(src == linkaux.getKey().getSrc()) {
+						Long w;
+						if((src.intValue() % 2 == 0) && (dst.intValue() % 2 == 0)) {
+							w = Long.valueOf(100);
+						}
+						else if((src.intValue() % 2 != 0) && (dst.intValue() % 2 != 0)) {
+							w = Long.valueOf(1);
+						}
+						else{
+							w = Long.valueOf(10);
+						}
+						System.out.print(dst + " ");
+						topo.get(src).put(dst, w);
+						
+					}
+				}
+				System.out.println();
+			}
 			printedTopo = true;
 		}
 
@@ -157,23 +193,28 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 			OFPacketIn pi = (OFPacketIn)msg;
 			OFMatch match = new OFMatch();
 		    match.loadFromPacket(pi.getPacketData(), pi.getInPort());	
-
 			// Obtain source and destination IPs.
-		    int ko = pi.getInPort();
-		    System.out.println("srcIP: " + match.getNetworkSourceCIDR());
-		    System.out.println("dstIP: " + match.getNetworkDestinationCIDR());
 			// ...
-			//System.out.println("srcIP: " + "a.b.c.d");
-	        //System.out.println("dstIP: " + "a.b.c.d");
-
-
+		    String srcIP = match.getNetworkSourceCIDR();
+		    String dstIP = match.getNetworkDestinationCIDR();
+		    System.out.println("srcIP: " + srcIP);
+		    System.out.println("dstIP: " + dstIP);
 			// Calculate the path using Dijkstra's algorithm.
+			Long src = Long.valueOf(Character.getNumericValue(srcIP.charAt(7)));
+			Long dst = Long.valueOf(Character.getNumericValue(dstIP.charAt(7)));
+		    predijkstra();
+		    dijkstra(src, dst, result);
+		    System.out.print("Path: ");
+		    for(int i = 0; i < result.size(); i++) {
+		    	System.out.print(result.get(i) + " ");
+		    }
+		    System.out.println();
 			Route route = null;
 			// ...
 			System.out.println("route: " + "1 2 3 ...");			
 
 			// Write the path into the flow tables of the switches on the path.
-			if (route != null) {
+			if (route != null) {	
 				installRoute(route.getPath(), match);
 			}
 			
@@ -183,10 +224,13 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 
 	// Install routing rules on switches. 
 	private void installRoute(List<NodePortTuple> path, OFMatch match) {
+		System.out.println("The function installRoute was triggered");
 
 		OFMatch m = new OFMatch();
 
-		m.setDataLayerType(Ethernet.TYPE_IPv4).setNetworkSource(match.getNetworkSource()).setNetworkDestination(match.getNetworkDestination());
+		m.setDataLayerType(Ethernet.TYPE_IPv4)
+				.setNetworkSource(match.getNetworkSource())
+				.setNetworkDestination(match.getNetworkDestination());
 
 		for (int i = 0; i <= path.size() - 1; i += 2) {
 			short inport = path.get(i).getPortId();
@@ -205,10 +249,45 @@ public class MyRouting implements IOFMessageListener, IFloodlightModule {
 					.setPriority((short) 105)
 					.setActions(actions)
 					.setLength(
-							(short) (OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH));
+							(short) (OFFlowMod.MINIMUM_LENGTH 
+									+ OFActionOutput.MINIMUM_LENGTH));
 			flowPusher.addFlow("routeFlow" + uniqueFlow, mod,
 					HexString.toHexString(path.get(i).getNodeId()));
 			uniqueFlow++;
 		}
 	}
+	
+	private void predijkstra() {
+		visited = new Boolean[topo.size()];
+		for (int i = 0; i < topo.size(); i++) {
+			visited[i] = false;
+		}
+		result = new ArrayList<Long>();
+	}
+	
+	private void dijkstra(Long src, Long dst, ArrayList<Long> result) {
+		Boolean ready = false;
+		Long got = null;
+		Long path = Long.valueOf(Integer.MAX_VALUE);
+		for(Entry<Long, HashMap<Long, Long>> aux : topo.entrySet()) {
+			if(aux.getKey() == src) {
+				result.add(aux.getKey());
+				for(Map.Entry<Long, Long> aux2 : topo.get(aux.getKey()).entrySet()) {
+					if(aux2.getKey() == dst) {
+						result.add(aux2.getKey());
+						ready = true;
+						break;
+					}
+					else if(aux2.getValue() < path) {
+						got = aux2.getKey();
+						path = aux2.getValue();
+					}
+				}
+			}
+		}
+		if(!ready) {
+			dijkstra(got, dst, result);
+		}
+	}
+	
 }
